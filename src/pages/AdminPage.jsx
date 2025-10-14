@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
-import * as pdfjsLib from 'pdfjs-dist'
+import * as pdfjsLib from 'pdfjs-dist/webpack'
+import 'pdfjs-dist/web/pdf_viewer.css'
 import '../App.css'
 
 // Configure PDF.js worker for version 5.x - use unpkg for ES module support
