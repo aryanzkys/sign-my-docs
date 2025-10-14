@@ -38,13 +38,27 @@ const AdminPage = () => {
   const renderPDF = async (url) => {
     try {
       console.log('Loading PDF for canvas rendering:', url)
-      const loadingTask = pdfjsLib.getDocument(url)
+      
+      if (!canvasRef.current) {
+        console.error('Canvas ref is not available')
+        return
+      }
+      
+      const loadingTask = pdfjsLib.getDocument({
+        url: url,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+        cMapPacked: true,
+      })
+      
       const pdf = await loadingTask.promise
+      console.log('PDF loaded successfully, pages:', pdf.numPages)
       setPdfDoc(pdf)
       
       // Get first page
       const page = await pdf.getPage(1)
       const viewport = page.getViewport({ scale: 1.0 })
+      
+      console.log('PDF page dimensions:', { width: viewport.width, height: viewport.height })
       
       // Store actual PDF dimensions
       setPdfPageDimensions({
@@ -52,23 +66,29 @@ const AdminPage = () => {
         height: viewport.height
       })
       
-      console.log('PDF page dimensions:', { width: viewport.width, height: viewport.height })
-      
       // Set canvas size to match PDF
       const canvas = canvasRef.current
       const context = canvas.getContext('2d')
+      
+      // Set canvas internal dimensions
       canvas.width = viewport.width
       canvas.height = viewport.height
+      
+      console.log('Canvas dimensions set:', { width: canvas.width, height: canvas.height })
       
       // Render PDF page
       const renderContext = {
         canvasContext: context,
         viewport: viewport
       }
+      
       await page.render(renderContext).promise
-      console.log('PDF rendered on canvas successfully')
+      console.log('✅ PDF rendered on canvas successfully')
+      console.log('Canvas size:', canvas.width, 'x', canvas.height)
+      console.log('Canvas style:', canvas.style.width, 'x', canvas.style.height)
     } catch (error) {
-      console.error('Error rendering PDF:', error)
+      console.error('❌ Error rendering PDF:', error)
+      alert(`Error loading PDF: ${error.message}`)
     }
   }
 
@@ -439,9 +459,8 @@ const AdminPage = () => {
                   ref={canvasRef}
                   style={{ 
                     display: 'block',
-                    maxWidth: '100%',
-                    width: `${pdfPageDimensions.width}px`,
-                    height: `${pdfPageDimensions.height}px`,
+                    border: '1px solid #ccc',
+                    backgroundColor: 'white',
                   }}
                 />
                 {signatureImage && (
