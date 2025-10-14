@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
-import * as pdfjsLib from 'pdfjs-dist'
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker'
 import '../App.css'
 
-// Configure PDF.js worker - use local worker bundled by Vite
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
+// Configure PDF.js worker - use workerPort for Vite ES module environment
+GlobalWorkerOptions.workerPort = new Worker(pdfWorker, { type: 'module' })
 
 const AdminPage = () => {
   const [requests, setRequests] = useState([])
@@ -45,7 +45,7 @@ const AdminPage = () => {
         return
       }
       
-      const loadingTask = pdfjsLib.getDocument({
+      const loadingTask = getDocument({
         url: url,
         cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
         cMapPacked: true,
