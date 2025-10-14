@@ -40,7 +40,11 @@ const AdminPage = () => {
     setPdfUrl(request.document_url)
     
     if (request.signature_type === 'e-ttd' && request.qr_code_url) {
+      console.log('E-TTD request selected, loading QR code from URL')
+      console.log('Validation token:', request.validation_token)
+      console.log('QR code URL length:', request.qr_code_url?.length)
       setSignatureImage(request.qr_code_url)
+      setShowSignatureUpload(false)
     } else {
       setSignatureImage(null)
       setShowSignatureUpload(true)
@@ -82,12 +86,18 @@ const AdminPage = () => {
     if (!selectedRequest || !signatureImage) return
 
     try {
+      console.log('Starting signature application process...')
+      console.log('Request type:', selectedRequest.signature_type)
+      console.log('Signature image type:', signatureImage.substring(0, 30))
+      
       const response = await fetch(selectedRequest.document_url)
       const pdfBytes = await response.arrayBuffer()
+      console.log('Original PDF loaded, size:', pdfBytes.byteLength, 'bytes')
 
       const pdfViewerHeight = pdfViewerRef.current.offsetHeight
       const pdfActualY = pdfViewerHeight - signaturePosition.y - 100
 
+      console.log('Embedding signature/QR at position:', { x: signaturePosition.x, y: pdfActualY })
       const modifiedPdfBytes = await addImageToPDF(
         pdfBytes,
         signatureImage,
@@ -96,10 +106,12 @@ const AdminPage = () => {
         100,
         100
       )
+      console.log('Modified PDF created, size:', modifiedPdfBytes.byteLength, 'bytes')
 
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
       const fileName = `signed_${Date.now()}.pdf`
       
+      console.log('Uploading signed PDF to storage...')
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, blob)
@@ -110,6 +122,8 @@ const AdminPage = () => {
         .from('documents')
         .getPublicUrl(fileName)
 
+      console.log('Signed PDF uploaded, URL:', urlData.publicUrl)
+      
       const { error: updateError } = await supabase
         .from('signature_requests')
         .update({
@@ -120,6 +134,7 @@ const AdminPage = () => {
 
       if (updateError) throw updateError
 
+      console.log('Database updated successfully')
       alert('Document signed successfully!')
       fetchRequests()
       setSelectedRequest(null)
