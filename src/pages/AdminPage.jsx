@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import '../App.css'
 
-// Configure PDF.js worker - use jsdelivr CDN which is more reliable
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
+// Configure PDF.js worker - use local worker bundled by Vite
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 const AdminPage = () => {
   const [requests, setRequests] = useState([])
