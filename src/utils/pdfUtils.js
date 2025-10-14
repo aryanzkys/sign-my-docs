@@ -80,7 +80,12 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height,
     
     console.log('Image drawn on page successfully')
 
-    const pdfBytesModified = await pdfDoc.save()
+    // Save with options to preserve content
+    const pdfBytesModified = await pdfDoc.save({
+      useObjectStreams: false,  // Disable object streams for compatibility
+      addDefaultPage: false,     // Don't add extra pages
+      objectsPerTick: 50,        // Process in chunks to avoid memory issues
+    })
     console.log('PDF saved, new size:', pdfBytesModified.byteLength, 'bytes')
     console.log('=== PDF Image Embedding Complete ===')
     
