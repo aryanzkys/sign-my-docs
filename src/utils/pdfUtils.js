@@ -1,10 +1,15 @@
 import { PDFDocument } from 'pdf-lib'
 
-export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height) => {
+export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height, pageNumber = 0) => {
   try {
     const pdfDoc = await PDFDocument.load(pdfBytes)
     const pages = pdfDoc.getPages()
-    const firstPage = pages[0]
+    const targetPage = pages[pageNumber] || pages[0]
+    const pageHeight = targetPage.getHeight()
+    const pageWidth = targetPage.getWidth()
+    
+    console.log('PDF page dimensions:', { width: pageWidth, height: pageHeight })
+    console.log('Adding image at position (before transform):', { x, y, width, height })
 
     // Extract base64 data from data URL and convert to bytes
     let imageBytes
@@ -31,9 +36,15 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height)
       image = await pdfDoc.embedJpg(imageBytes)
     }
 
-    firstPage.drawImage(image, {
+    // In PDF coordinate system, (0,0) is bottom-left
+    // The y coordinate passed in is from top, so we need to transform it
+    const pdfY = pageHeight - y - height
+    
+    console.log('Final PDF coordinates:', { x, y: pdfY, width, height })
+    
+    targetPage.drawImage(image, {
       x: x,
-      y: y,
+      y: pdfY,
       width: width,
       height: height,
     })
@@ -42,6 +53,22 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height)
     return pdfBytesModified
   } catch (error) {
     console.error('Error adding image to PDF:', error)
+    throw error
+  }
+}
+
+export const getPDFDimensions = async (pdfBytes) => {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBytes)
+    const pages = pdfDoc.getPages()
+    const firstPage = pages[0]
+    return {
+      width: firstPage.getWidth(),
+      height: firstPage.getHeight(),
+      pageCount: pages.length
+    }
+  } catch (error) {
+    console.error('Error getting PDF dimensions:', error)
     throw error
   }
 }

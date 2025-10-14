@@ -94,15 +94,15 @@ const AdminPage = () => {
       const pdfBytes = await response.arrayBuffer()
       console.log('Original PDF loaded, size:', pdfBytes.byteLength, 'bytes')
 
-      const pdfViewerHeight = pdfViewerRef.current.offsetHeight
-      const pdfActualY = pdfViewerHeight - signaturePosition.y - 100
-
-      console.log('Embedding signature/QR at position:', { x: signaturePosition.x, y: pdfActualY })
+      // The iframe height is fixed at 600px, but the actual PDF might be different
+      // We'll use signaturePosition directly and let addImageToPDF handle coordinate transformation
+      console.log('Embedding signature/QR at screen position:', signaturePosition)
+      
       const modifiedPdfBytes = await addImageToPDF(
         pdfBytes,
         signatureImage,
         signaturePosition.x,
-        pdfActualY,
+        signaturePosition.y,
         100,
         100
       )
