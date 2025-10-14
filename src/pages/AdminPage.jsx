@@ -269,6 +269,30 @@ const AdminPage = () => {
               </div>
             )}
 
+            {selectedRequest.signature_type === 'e-ttd' && signatureImage && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '1rem', 
+                background: 'rgba(102, 126, 234, 0.1)', 
+                borderRadius: '8px',
+                border: '1px solid rgba(102, 126, 234, 0.3)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>✓</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>QR Code Ready</strong>
+                </div>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0.5rem 0' }}>
+                  The E-TTD QR code has been generated and is ready to place on the document.
+                  Drag it to the desired position and click "Apply Signature" to embed it permanently.
+                </p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0.5rem 0 0 0' }}>
+                  <strong>Validation URL:</strong> <code style={{ background: 'rgba(255,255,255,0.5)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                    https://signme-aryan.netlify.app/validate/{selectedRequest.validation_token}
+                  </code>
+                </p>
+              </div>
+            )}
+
             {pdfUrl && (
               <div
                 ref={pdfViewerRef}
@@ -298,17 +322,41 @@ const AdminPage = () => {
                       left: `${signaturePosition.x}px`,
                       top: `${signaturePosition.y}px`,
                       cursor: isDragging ? 'grabbing' : 'grab',
-                      border: '2px dashed #667eea',
+                      border: selectedRequest?.signature_type === 'e-ttd' 
+                        ? '3px dashed #667eea' 
+                        : '2px dashed #667eea',
                       padding: '4px',
-                      background: 'rgba(255, 255, 255, 0.9)',
+                      background: 'rgba(255, 255, 255, 0.95)',
                       borderRadius: '4px',
+                      boxShadow: isDragging 
+                        ? '0 8px 16px rgba(102, 126, 234, 0.3)' 
+                        : '0 2px 8px rgba(0, 0, 0, 0.15)',
+                      transition: 'box-shadow 0.2s ease',
                     }}
                   >
                     <img
                       src={signatureImage}
-                      alt="Signature"
-                      style={{ width: '100px', height: '100px', pointerEvents: 'none' }}
+                      alt={selectedRequest?.signature_type === 'e-ttd' ? 'QR Code' : 'Signature'}
+                      style={{ width: '100px', height: '100px', pointerEvents: 'none', display: 'block' }}
                     />
+                    {selectedRequest?.signature_type === 'e-ttd' && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-24px',
+                        left: '0',
+                        right: '0',
+                        textAlign: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold',
+                        color: '#667eea',
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '2px 4px',
+                        borderRadius: '4px',
+                        border: '1px solid #667eea',
+                      }}>
+                        QR CODE
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
