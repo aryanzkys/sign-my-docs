@@ -107,6 +107,11 @@ const AdminPage = () => {
         100
       )
       console.log('Modified PDF created, size:', modifiedPdfBytes.byteLength, 'bytes')
+      
+      // Verify the PDF was actually modified
+      if (modifiedPdfBytes.byteLength === pdfBytes.byteLength) {
+        console.warn('WARNING: Modified PDF has same size as original - QR code may not have been embedded!')
+      }
 
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
       const fileName = `signed_${Date.now()}.pdf`
@@ -123,6 +128,17 @@ const AdminPage = () => {
         .getPublicUrl(fileName)
 
       console.log('Signed PDF uploaded, URL:', urlData.publicUrl)
+      
+      // Verify the upload by fetching the file back
+      console.log('Verifying uploaded file...')
+      const verifyResponse = await fetch(urlData.publicUrl)
+      const verifyBytes = await verifyResponse.arrayBuffer()
+      console.log('Verified uploaded file size:', verifyBytes.byteLength, 'bytes')
+      
+      if (verifyBytes.byteLength !== modifiedPdfBytes.byteLength) {
+        console.error('ERROR: Uploaded file size does not match modified PDF!')
+        alert('Warning: There may be an issue with the uploaded file. Please check the signed document.')
+      }
       
       const { error: updateError } = await supabase
         .from('signature_requests')
