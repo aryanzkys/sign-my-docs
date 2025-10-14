@@ -6,10 +6,26 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height)
     const pages = pdfDoc.getPages()
     const firstPage = pages[0]
 
-    const imageBytes = await fetch(imageDataUrl).then((res) => res.arrayBuffer())
-    let image
+    // Extract base64 data from data URL and convert to bytes
+    let imageBytes
+    if (imageDataUrl.startsWith('data:')) {
+      // Extract the base64 part from the data URL
+      const base64Data = imageDataUrl.split(',')[1]
+      // Decode base64 to binary string
+      const binaryString = atob(base64Data)
+      // Convert binary string to Uint8Array
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      imageBytes = bytes
+    } else {
+      // If it's a URL, fetch it
+      imageBytes = await fetch(imageDataUrl).then((res) => res.arrayBuffer())
+    }
     
-    if (imageDataUrl.startsWith('data:image/png')) {
+    let image
+    if (imageDataUrl.startsWith('data:image/png') || imageDataUrl.includes('.png')) {
       image = await pdfDoc.embedPng(imageBytes)
     } else {
       image = await pdfDoc.embedJpg(imageBytes)
