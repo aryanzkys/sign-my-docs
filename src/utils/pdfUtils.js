@@ -70,11 +70,29 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height,
     // The y coordinate passed in is from top, so we need to transform it
     const pdfY = pageHeight - y - height
     
-    console.log('Final PDF coordinates:', { x, y: pdfY, width, height })
+    console.log('Coordinate calculation:')
+    console.log('  - Page height:', pageHeight)
+    console.log('  - Screen Y:', y)
+    console.log('  - Image height:', height)
+    console.log('  - Calculated PDF Y:', pdfY)
+    
+    // Validate coordinates are within bounds
+    if (x < 0 || x + width > pageWidth) {
+      console.warn('WARNING: X coordinate out of bounds!', { x, width, pageWidth })
+    }
+    if (pdfY < 0 || pdfY + height > pageHeight) {
+      console.warn('WARNING: Y coordinate out of bounds!', { pdfY, height, pageHeight })
+    }
+    
+    // Clamp coordinates to valid range
+    const finalX = Math.max(0, Math.min(x, pageWidth - width))
+    const finalY = Math.max(0, Math.min(pdfY, pageHeight - height))
+    
+    console.log('Final PDF coordinates (after clamping):', { x: finalX, y: finalY, width, height })
     
     targetPage.drawImage(image, {
-      x: x,
-      y: pdfY,
+      x: finalX,
+      y: finalY,
       width: width,
       height: height,
     })

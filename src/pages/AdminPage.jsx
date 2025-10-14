@@ -94,17 +94,44 @@ const AdminPage = () => {
       const pdfBytes = await response.arrayBuffer()
       console.log('Original PDF loaded, size:', pdfBytes.byteLength, 'bytes')
 
-      // The iframe height is fixed at 600px, but the actual PDF might be different
-      // We'll use signaturePosition directly and let addImageToPDF handle coordinate transformation
-      console.log('Embedding signature/QR at screen position:', signaturePosition)
+      // Get actual PDF dimensions for proper coordinate scaling
+      const { PDFDocument } = await import('pdf-lib')
+      const tempDoc = await PDFDocument.load(pdfBytes)
+      const tempPages = tempDoc.getPages()
+      const firstPage = tempPages[0]
+      const actualPDFHeight = firstPage.getHeight()
+      const actualPDFWidth = firstPage.getWidth()
+      
+      console.log('Actual PDF page dimensions:', { width: actualPDFWidth, height: actualPDFHeight })
+      console.log('PDF viewer dimensions:', { 
+        width: pdfViewerRef.current.offsetWidth, 
+        height: pdfViewerRef.current.offsetHeight 
+      })
+      
+      // Calculate scaling factor between viewer and actual PDF
+      // The iframe is 600px tall, but the PDF might be 842 points (A4)
+      const viewerHeight = pdfViewerRef.current.offsetHeight
+      const scaleY = actualPDFHeight / viewerHeight
+      const scaleX = actualPDFWidth / pdfViewerRef.current.offsetWidth
+      
+      console.log('Scaling factors:', { scaleX, scaleY })
+      console.log('Screen position:', signaturePosition)
+      
+      // Scale coordinates from viewer to actual PDF
+      const scaledX = signaturePosition.x * scaleX
+      const scaledY = signaturePosition.y * scaleY
+      const scaledWidth = 100 * scaleX
+      const scaledHeight = 100 * scaleY
+      
+      console.log('Scaled PDF position:', { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight })
       
       const modifiedPdfBytes = await addImageToPDF(
         pdfBytes,
         signatureImage,
-        signaturePosition.x,
-        signaturePosition.y,
-        100,
-        100
+        scaledX,
+        scaledY,
+        scaledWidth,
+        scaledHeight
       )
       console.log('Modified PDF created, size:', modifiedPdfBytes.byteLength, 'bytes')
       
