@@ -4,8 +4,8 @@ import { addImageToPDF } from '../utils/pdfUtils'
 import * as pdfjsLib from 'pdfjs-dist'
 import '../App.css'
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Configure PDF.js worker - use jsdelivr CDN which is more reliable
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
 
 const AdminPage = () => {
   const [requests, setRequests] = useState([])
