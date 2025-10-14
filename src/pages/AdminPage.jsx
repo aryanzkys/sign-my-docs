@@ -111,8 +111,22 @@ const AdminPage = () => {
       // Verify the PDF was actually modified
       if (modifiedPdfBytes.byteLength === pdfBytes.byteLength) {
         console.warn('WARNING: Modified PDF has same size as original - QR code may not have been embedded!')
+      } else if (modifiedPdfBytes.byteLength < pdfBytes.byteLength) {
+        console.error('ERROR: Modified PDF is SMALLER than original - something went wrong!')
+        alert('Error: The modified PDF appears to be corrupted. Please try again.')
+        return
+      } else {
+        console.log('✓ Modified PDF is larger than original by', modifiedPdfBytes.byteLength - pdfBytes.byteLength, 'bytes')
       }
 
+      // Create a preview of the modified PDF before uploading
+      const previewBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+      const previewUrl = URL.createObjectURL(previewBlob)
+      console.log('Created preview URL for modified PDF:', previewUrl)
+      
+      // Optional: Show preview to admin before uploading
+      // For now, we'll just log it and proceed with upload
+      
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
       const fileName = `signed_${Date.now()}.pdf`
       
@@ -121,7 +135,10 @@ const AdminPage = () => {
         .from('documents')
         .upload(fileName, blob)
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw uploadError
+      }
 
       const { data: urlData } = supabase.storage
         .from('documents')
@@ -137,7 +154,10 @@ const AdminPage = () => {
       
       if (verifyBytes.byteLength !== modifiedPdfBytes.byteLength) {
         console.error('ERROR: Uploaded file size does not match modified PDF!')
-        alert('Warning: There may be an issue with the uploaded file. Please check the signed document.')
+        console.error('Expected:', modifiedPdfBytes.byteLength, 'Got:', verifyBytes.byteLength)
+        alert('Warning: There may be an issue with the uploaded file. File sizes do not match!')
+      } else {
+        console.log('✓ Upload verification successful - file sizes match')
       }
       
       const { error: updateError } = await supabase
@@ -151,7 +171,14 @@ const AdminPage = () => {
       if (updateError) throw updateError
 
       console.log('Database updated successfully')
-      alert('Document signed successfully!')
+      console.log('=== SIGNATURE APPLICATION COMPLETE ===')
+      console.log('Signed document URL:', urlData.publicUrl)
+      console.log('User can now download from /check page')
+      
+      // Clean up preview URL
+      URL.revokeObjectURL(previewUrl)
+      
+      alert(`Document signed successfully!\n\nSigned PDF URL: ${urlData.publicUrl}\n\nYou can verify the QR code is embedded by opening this URL.`)
       fetchRequests()
       setSelectedRequest(null)
       setPdfUrl(null)
