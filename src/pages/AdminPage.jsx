@@ -430,13 +430,19 @@ const AdminPage = () => {
                   overflow: 'auto',
                   background: '#f7fafc',
                   marginBottom: '1rem',
-                  display: 'inline-block',
+                  display: 'block',
+                  width: 'fit-content',
                   maxWidth: '100%',
                 }}
               >
                 <canvas
                   ref={canvasRef}
-                  style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+                  style={{ 
+                    display: 'block',
+                    maxWidth: '100%',
+                    width: `${pdfPageDimensions.width}px`,
+                    height: `${pdfPageDimensions.height}px`,
+                  }}
                 />
                 {signatureImage && (
                   <div
