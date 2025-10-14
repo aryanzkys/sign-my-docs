@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
+import * as pdfjsLib from 'pdfjs-dist'
 import '../App.css'
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 const AdminPage = () => {
   const [requests, setRequests] = useState([])
@@ -9,15 +13,64 @@ const AdminPage = () => {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [signatureImage, setSignatureImage] = useState(null)
   const [pdfUrl, setPdfUrl] = useState(null)
+  const [setPdfDoc] = useState(null)
+  const [pdfPageDimensions, setPdfPageDimensions] = useState({ width: 595, height: 842 }) // A4 default
   const [signaturePosition, setSignaturePosition] = useState({ x: 100, y: 100 })
+  const [signatureSize, setSignatureSize] = useState({ width: 100, height: 100 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
   const [showSignatureUpload, setShowSignatureUpload] = useState(false)
-  const pdfViewerRef = useRef(null)
+  const canvasRef = useRef(null)
   const signatureRef = useRef(null)
+  const resizeHandleRef = useRef(null)
 
   useEffect(() => {
     fetchRequests()
   }, [])
+
+  // Render PDF on canvas when URL changes
+  useEffect(() => {
+    if (pdfUrl && canvasRef.current) {
+      renderPDF(pdfUrl)
+    }
+  }, [pdfUrl])
+
+  const renderPDF = async (url) => {
+    try {
+      console.log('Loading PDF for canvas rendering:', url)
+      const loadingTask = pdfjsLib.getDocument(url)
+      const pdf = await loadingTask.promise
+      setPdfDoc(pdf)
+      
+      // Get first page
+      const page = await pdf.getPage(1)
+      const viewport = page.getViewport({ scale: 1.0 })
+      
+      // Store actual PDF dimensions
+      setPdfPageDimensions({
+        width: viewport.width,
+        height: viewport.height
+      })
+      
+      console.log('PDF page dimensions:', { width: viewport.width, height: viewport.height })
+      
+      // Set canvas size to match PDF
+      const canvas = canvasRef.current
+      const context = canvas.getContext('2d')
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      
+      // Render PDF page
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      }
+      await page.render(renderContext).promise
+      console.log('PDF rendered on canvas successfully')
+    } catch (error) {
+      console.error('Error rendering PDF:', error)
+    }
+  }
 
   const fetchRequests = async () => {
     try {
@@ -64,22 +117,37 @@ const AdminPage = () => {
   }
 
   const handleMouseDown = (e) => {
-    if (signatureRef.current && signatureRef.current.contains(e.target)) {
+    if (resizeHandleRef.current && resizeHandleRef.current.contains(e.target)) {
+      setIsResizing(true)
+      e.stopPropagation()
+    } else if (signatureRef.current && signatureRef.current.contains(e.target)) {
       setIsDragging(true)
     }
   }
 
   const handleMouseMove = (e) => {
-    if (isDragging && pdfViewerRef.current) {
-      const rect = pdfViewerRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left - 50
-      const y = e.clientY - rect.top - 50
-      setSignaturePosition({ x, y })
+    if (!canvasRef.current) return
+    
+    const rect = canvasRef.current.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    if (isDragging) {
+      // Dragging - move the QR code
+      const newX = Math.max(0, Math.min(mouseX - signatureSize.width / 2, pdfPageDimensions.width - signatureSize.width))
+      const newY = Math.max(0, Math.min(mouseY - signatureSize.height / 2, pdfPageDimensions.height - signatureSize.height))
+      setSignaturePosition({ x: newX, y: newY })
+    } else if (isResizing) {
+      // Resizing - adjust size
+      const newWidth = Math.max(50, Math.min(mouseX - signaturePosition.x, pdfPageDimensions.width - signaturePosition.x))
+      const newHeight = Math.max(50, Math.min(mouseY - signaturePosition.y, pdfPageDimensions.height - signaturePosition.y))
+      setSignatureSize({ width: newWidth, height: newHeight })
     }
   }
 
   const handleMouseUp = () => {
     setIsDragging(false)
+    setIsResizing(false)
   }
 
   const handleApplySignature = async () => {
@@ -94,44 +162,18 @@ const AdminPage = () => {
       const pdfBytes = await response.arrayBuffer()
       console.log('Original PDF loaded, size:', pdfBytes.byteLength, 'bytes')
 
-      // Get actual PDF dimensions for proper coordinate scaling
-      const { PDFDocument } = await import('pdf-lib')
-      const tempDoc = await PDFDocument.load(pdfBytes)
-      const tempPages = tempDoc.getPages()
-      const firstPage = tempPages[0]
-      const actualPDFHeight = firstPage.getHeight()
-      const actualPDFWidth = firstPage.getWidth()
-      
-      console.log('Actual PDF page dimensions:', { width: actualPDFWidth, height: actualPDFHeight })
-      console.log('PDF viewer dimensions:', { 
-        width: pdfViewerRef.current.offsetWidth, 
-        height: pdfViewerRef.current.offsetHeight 
-      })
-      
-      // Calculate scaling factor between viewer and actual PDF
-      // The iframe is 600px tall, but the PDF might be 842 points (A4)
-      const viewerHeight = pdfViewerRef.current.offsetHeight
-      const scaleY = actualPDFHeight / viewerHeight
-      const scaleX = actualPDFWidth / pdfViewerRef.current.offsetWidth
-      
-      console.log('Scaling factors:', { scaleX, scaleY })
-      console.log('Screen position:', signaturePosition)
-      
-      // Scale coordinates from viewer to actual PDF
-      const scaledX = signaturePosition.x * scaleX
-      const scaledY = signaturePosition.y * scaleY
-      const scaledWidth = 100 * scaleX
-      const scaledHeight = 100 * scaleY
-      
-      console.log('Scaled PDF position:', { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight })
+      // Use exact PDF coordinates - no scaling needed since canvas matches PDF dimensions
+      console.log('PDF page dimensions:', pdfPageDimensions)
+      console.log('QR code position (PDF points):', signaturePosition)
+      console.log('QR code size (PDF points):', signatureSize)
       
       const modifiedPdfBytes = await addImageToPDF(
         pdfBytes,
         signatureImage,
-        scaledX,
-        scaledY,
-        scaledWidth,
-        scaledHeight
+        signaturePosition.x,
+        signaturePosition.y,
+        signatureSize.width,
+        signatureSize.height
       )
       console.log('Modified PDF created, size:', modifiedPdfBytes.byteLength, 'bytes')
       
@@ -379,23 +421,22 @@ const AdminPage = () => {
 
             {pdfUrl && (
               <div
-                ref={pdfViewerRef}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 style={{
                   position: 'relative',
                   border: '2px solid var(--border-color)',
                   borderRadius: '8px',
-                  overflow: 'hidden',
-                  minHeight: '600px',
+                  overflow: 'auto',
                   background: '#f7fafc',
                   marginBottom: '1rem',
+                  display: 'inline-block',
+                  maxWidth: '100%',
                 }}
               >
-                <iframe
-                  src={pdfUrl}
-                  style={{ width: '100%', height: '600px', border: 'none' }}
-                  title="PDF Viewer"
+                <canvas
+                  ref={canvasRef}
+                  style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
                 />
                 {signatureImage && (
                   <div
@@ -405,6 +446,8 @@ const AdminPage = () => {
                       position: 'absolute',
                       left: `${signaturePosition.x}px`,
                       top: `${signaturePosition.y}px`,
+                      width: `${signatureSize.width}px`,
+                      height: `${signatureSize.height}px`,
                       cursor: isDragging ? 'grabbing' : 'grab',
                       border: selectedRequest?.signature_type === 'e-ttd' 
                         ? '3px dashed #667eea' 
@@ -421,7 +464,7 @@ const AdminPage = () => {
                     <img
                       src={signatureImage}
                       alt={selectedRequest?.signature_type === 'e-ttd' ? 'QR Code' : 'Signature'}
-                      style={{ width: '100px', height: '100px', pointerEvents: 'none', display: 'block' }}
+                      style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'block', objectFit: 'contain' }}
                     />
                     {selectedRequest?.signature_type === 'e-ttd' && (
                       <div style={{
@@ -441,6 +484,41 @@ const AdminPage = () => {
                         QR CODE
                       </div>
                     )}
+                    {/* Resize handle */}
+                    <div
+                      ref={resizeHandleRef}
+                      onMouseDown={handleMouseDown}
+                      style={{
+                        position: 'absolute',
+                        right: '0',
+                        bottom: '0',
+                        width: '16px',
+                        height: '16px',
+                        background: '#667eea',
+                        cursor: 'nwse-resize',
+                        borderRadius: '0 0 4px 0',
+                      }}
+                    />
+                  </div>
+                )}
+                {/* Display precise coordinates */}
+                {signatureImage && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontFamily: 'monospace',
+                    border: '1px solid #667eea',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  }}>
+                    <div><strong>Position (PDF points):</strong></div>
+                    <div>X: {Math.round(signaturePosition.x)}, Y: {Math.round(signaturePosition.y)}</div>
+                    <div><strong>Size (PDF points):</strong></div>
+                    <div>W: {Math.round(signatureSize.width)}, H: {Math.round(signatureSize.height)}</div>
                   </div>
                 )}
               </div>
