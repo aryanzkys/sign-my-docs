@@ -4,9 +4,9 @@ import { addImageToPDF } from '../utils/pdfUtils'
 import * as pdfjsLib from 'pdfjs-dist'
 import '../App.css'
 
-// Configure PDF.js worker - use CDN for maximum compatibility
-if (typeof window !== 'undefined' && 'pdfjsWorker' in window === false) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Configure PDF.js worker for version 5.x - use unpkg for ES module support
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 }
 
 const AdminPage = () => {
