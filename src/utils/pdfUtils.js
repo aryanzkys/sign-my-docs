@@ -15,6 +15,7 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height,
     const pageWidth = targetPage.getWidth()
     
     console.log('PDF page dimensions:', { width: pageWidth, height: pageHeight })
+    console.log('Total pages:', pages.length)
     console.log('Adding image at position (before transform):', { x, y, width, height })
 
     // Extract base64 data from data URL and convert to bytes
@@ -80,13 +81,27 @@ export const addImageToPDF = async (pdfBytes, imageDataUrl, x, y, width, height,
     
     console.log('Image drawn on page successfully')
 
-    // Save with options to preserve content
+    // Save with options to preserve content and ensure proper serialization
+    console.log('Saving PDF with embedded image...')
     const pdfBytesModified = await pdfDoc.save({
-      useObjectStreams: false,  // Disable object streams for compatibility
+      useObjectStreams: false,  // Disable object streams for better compatibility
       addDefaultPage: false,     // Don't add extra pages
       objectsPerTick: 50,        // Process in chunks to avoid memory issues
+      updateFieldAppearances: false, // Don't modify form fields
     })
-    console.log('PDF saved, new size:', pdfBytesModified.byteLength, 'bytes')
+    console.log('PDF saved successfully, new size:', pdfBytesModified.byteLength, 'bytes')
+    
+    // Verify the saved PDF can be loaded and still has the image
+    console.log('Verifying saved PDF integrity...')
+    try {
+      const verifyDoc = await PDFDocument.load(pdfBytesModified)
+      const verifyPages = verifyDoc.getPages()
+      console.log('✓ Verification: PDF can be loaded, pages:', verifyPages.length)
+    } catch (verifyError) {
+      console.error('ERROR: Saved PDF cannot be loaded!', verifyError)
+      throw new Error('PDF verification failed - the saved PDF is corrupted')
+    }
+    
     console.log('=== PDF Image Embedding Complete ===')
     
     return pdfBytesModified

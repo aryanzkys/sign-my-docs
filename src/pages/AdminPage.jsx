@@ -119,13 +119,30 @@ const AdminPage = () => {
       }
       console.log('✓ QR code embedding completed successfully')
 
-      // Create a preview of the modified PDF before uploading
-      const previewBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
-      const previewUrl = URL.createObjectURL(previewBlob)
-      console.log('Created preview URL for modified PDF:', previewUrl)
+      // CRITICAL: Download the modified PDF locally to verify QR code is embedded
+      console.log('Creating local download for verification...')
+      const verifyBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+      const verifyUrl = URL.createObjectURL(verifyBlob)
+      const verifyLink = document.createElement('a')
+      verifyLink.href = verifyUrl
+      verifyLink.download = `VERIFY_signed_${selectedRequest.document_name}`
+      verifyLink.click()
+      URL.revokeObjectURL(verifyUrl)
+      console.log('✓ Verification PDF downloaded - please check if QR code is present!')
       
-      // Optional: Show preview to admin before uploading
-      // For now, we'll just log it and proceed with upload
+      // Ask user to verify before uploading
+      const shouldUpload = confirm(
+        'PDF with QR code has been downloaded for verification.\n\n' +
+        'Please open the downloaded file and verify the QR code is visible.\n\n' +
+        'Click OK to continue uploading to storage.\n' +
+        'Click Cancel to abort.'
+      )
+      
+      if (!shouldUpload) {
+        console.log('Upload cancelled by user')
+        alert('Upload cancelled. The modified PDF was not uploaded.')
+        return
+      }
       
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
       const fileName = `signed_${Date.now()}.pdf`
@@ -174,9 +191,6 @@ const AdminPage = () => {
       console.log('=== SIGNATURE APPLICATION COMPLETE ===')
       console.log('Signed document URL:', urlData.publicUrl)
       console.log('User can now download from /check page')
-      
-      // Clean up preview URL
-      URL.revokeObjectURL(previewUrl)
       
       alert(`Document signed successfully!\n\nSigned PDF URL: ${urlData.publicUrl}\n\nYou can verify the QR code is embedded by opening this URL.`)
       fetchRequests()
