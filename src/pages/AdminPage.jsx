@@ -43,6 +43,7 @@ const AdminPage = () => {
 
   const renderPDF = async (url) => {
     try {
+      console.log('=== Starting PDF rendering ===')
       console.log('Loading PDF for canvas rendering:', url)
       console.log('PDF.js version:', pdfjsLib.version)
       console.log('WorkerSrc:', pdfjsLib.GlobalWorkerOptions.workerSrc)
@@ -52,21 +53,29 @@ const AdminPage = () => {
         return
       }
       
+      console.log('Step 1: Calling pdfjsLib.getDocument()')
       const loadingTask = pdfjsLib.getDocument({
         url: url,
         cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
         cMapPacked: true,
       })
+      console.log('Loading task created:', typeof loadingTask, loadingTask)
       
+      console.log('Step 2: Awaiting loadingTask.promise')
       const pdf = await loadingTask.promise
-      console.log('PDF loaded with', pdf.numPages, 'pages')
+      console.log('PDF loaded successfully with', pdf.numPages, 'pages')
+      console.log('PDF object type:', typeof pdf, pdf)
       setPdfDoc(pdf)
       
       // Get first page
+      console.log('Step 3: Getting page 1')
       const page = await pdf.getPage(1)
-      const viewport = page.getViewport({ scale: 1.0 })
+      console.log('Page retrieved, type:', typeof page, page)
+      console.log('page.render type:', typeof page.render)
       
-      console.log('PDF page dimensions:', { width: viewport.width, height: viewport.height })
+      console.log('Step 4: Creating viewport')
+      const viewport = page.getViewport({ scale: 1.0 })
+      console.log('Viewport created:', typeof viewport, { width: viewport.width, height: viewport.height })
       
       // Store actual PDF dimensions
       setPdfPageDimensions({
@@ -77,6 +86,7 @@ const AdminPage = () => {
       // Set canvas size to match PDF
       const canvas = canvasRef.current
       const context = canvas.getContext('2d')
+      console.log('Canvas context type:', typeof context, context)
       
       // Set canvas internal dimensions
       canvas.width = viewport.width
@@ -85,18 +95,35 @@ const AdminPage = () => {
       console.log('Canvas dimensions set:', { width: canvas.width, height: canvas.height })
       
       // Render PDF page
+      console.log('Step 5: Preparing render context')
       const renderContext = {
         canvasContext: context,
         viewport: viewport
       }
+      console.log('Render context:', typeof renderContext, renderContext)
       
-      await page.render(renderContext)
+      console.log('Step 6: Calling page.render()')
+      console.log('About to call page.render with:', { 
+        pageType: typeof page, 
+        renderType: typeof page.render,
+        contextType: typeof renderContext.canvasContext,
+        viewportType: typeof renderContext.viewport
+      })
+      
+      const renderTask = page.render(renderContext)
+      console.log('Render task returned:', typeof renderTask, renderTask)
+      
+      console.log('Step 7: Awaiting render task')
+      await renderTask
       console.log('✅ Page rendered successfully')
       console.log('Canvas size:', canvas.width, 'x', canvas.height)
       console.log('Canvas style:', canvas.style.width, 'x', canvas.style.height)
     } catch (error) {
       console.error('❌ Error loading PDF:', error)
-      console.error('Error details:', error.message, error.stack)
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+      console.error('Error name:', error.name)
+      console.error('Full error object:', error)
       alert(`Error loading PDF: ${error.message}`)
     }
   }
