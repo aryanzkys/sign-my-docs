@@ -73,9 +73,20 @@ const CheckStatusPage = () => {
         <h1 style={{ marginBottom: '1rem', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
           Check Document Status
         </h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Enter your email to view all your signature requests
         </p>
+        <div style={{ 
+          padding: '1rem', 
+          marginBottom: '2rem', 
+          borderRadius: '8px', 
+          background: 'rgba(102, 126, 234, 0.1)', 
+          border: '1px solid rgba(102, 126, 234, 0.3)' 
+        }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+            💡 <strong>How it works:</strong> After admin approval, download your QR code and manually embed it into your PDF document. Use the verify link to confirm authenticity.
+          </p>
+        </div>
 
         <form onSubmit={handleCheck}>
           <div className="form-group">
@@ -140,7 +151,16 @@ const CheckStatusPage = () => {
                         onClick={() => handleDownload(request.document_url, request.document_name)}
                         style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                       >
-                        Download Original
+                        📄 Download Original
+                      </button>
+                    )}
+                    {request.qr_code_url && request.status === 'approved' && (
+                      <button
+                        className="btn btn-success"
+                        onClick={() => handleDownload(request.qr_code_url, `QR_${request.document_name.replace('.pdf', '')}.png`)}
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                      >
+                        📥 Download QR Code
                       </button>
                     )}
                     {request.signed_document_url && (
@@ -149,8 +169,19 @@ const CheckStatusPage = () => {
                         onClick={() => handleDownload(request.signed_document_url, `signed_${request.document_name}`)}
                         style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                       >
-                        Download Signed
+                        📥 Download Signed
                       </button>
+                    )}
+                    {request.validation_token && (
+                      <a
+                        href={`/validate/${request.validation_token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn"
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', textDecoration: 'none' }}
+                      >
+                        🔍 Verify QR Code
+                      </a>
                     )}
                   </div>
                 </div>
