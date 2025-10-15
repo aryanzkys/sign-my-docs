@@ -40,32 +40,42 @@ const AdminPage = () => {
       
       // Generate QR code only for E-TTD requests
       let qrCodeUrl = null
-      let validationToken = null
+      let validationToken = request.validation_token // Use existing token
 
       if (request.signature_type === 'e-ttd') {
         console.log('Generating QR code for E-TTD request')
         
-        // Generate unique validation token
-        validationToken = generateToken()
-        console.log('Validation token generated:', validationToken)
+        // Use existing validation token or generate new one if missing
+        if (!validationToken) {
+          validationToken = generateToken()
+          console.log('Validation token generated:', validationToken)
+        }
         
         // Generate QR code that points to validation URL
         qrCodeUrl = await generateQRCode(validationToken)
         console.log('QR code generated, data URL length:', qrCodeUrl.length)
       }
 
-      // Update request with approval and QR code (for E-TTD)
+      // Update request - set status to 'validated' for approved requests
+      const updateData = {
+        status: 'validated',
+        qr_code_url: qrCodeUrl,
+      }
+
+      // Only update validation_token if it's an E-TTD request and token was generated
+      if (request.signature_type === 'e-ttd' && validationToken) {
+        updateData.validation_token = validationToken
+      }
+
       const { error: updateError } = await supabase
         .from('signature_requests')
-        .update({ 
-          status: 'approved',
-          qr_code_url: qrCodeUrl,
-          validation_token: validationToken,
-          approved_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', request.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Update error details:', updateError)
+        throw updateError
+      }
 
       console.log('✅ Request approved successfully')
       alert('Request approved! User can now download their QR code from the Check Status page.')
@@ -74,7 +84,8 @@ const AdminPage = () => {
       await fetchRequests()
     } catch (error) {
       console.error('Error approving request:', error)
-      alert('Error approving request. Please try again.')
+      console.error('Error details:', error.message, error.details, error.hint)
+      alert(`Error approving request: ${error.message || 'Please try again.'}`)
     } finally {
       setProcessing(false)
     }
@@ -86,19 +97,18 @@ const AdminPage = () => {
 
     setProcessing(true)
     try {
-      const { error } = await supabase
-        .from('signature_requests')
-        .update({ 
-          status: 'rejected',
-          rejection_reason: reason,
-          rejected_at: new Date().toISOString()
-        })
-        .eq('id', request.id)
-
-      if (error) throw error
-
-      alert('Request rejected.')
-      await fetchRequests()
+      // Note: The current schema doesn't have 'rejected' status or rejection_reason field
+      // We'll use the 'message' field to store rejection reason and keep status as 'pending'
+      // Or we could delete the request. For now, let's just alert that rejection isn't supported
+      alert('Note: The current database schema does not support rejection. Please update the schema to add a "rejected" status and "rejection_reason" field, or delete the request manually.')
+      
+      // If you want to delete the request instead:
+      // const { error } = await supabase
+      //   .from('signature_requests')
+      //   .delete()
+      //   .eq('id', request.id)
+      // if (error) throw error
+      
     } catch (error) {
       console.error('Error rejecting request:', error)
       alert('Error rejecting request. Please try again.')
@@ -125,8 +135,7 @@ const AdminPage = () => {
   const getStatusBadge = (status) => {
     const badges = {
       pending: { class: 'status-pending', label: 'PENDING REVIEW' },
-      approved: { class: 'status-validated', label: 'APPROVED' },
-      rejected: { class: 'status-badge', label: 'REJECTED' },
+      validated: { class: 'status-validated', label: 'APPROVED' },
       signed: { class: 'status-signed', label: 'SIGNED' },
     }
     const badge = badges[status] || { class: 'status-badge', label: status.toUpperCase() }
@@ -148,8 +157,8 @@ const AdminPage = () => {
   }
 
   const pendingRequests = requests.filter(r => r.status === 'pending')
-  const approvedRequests = requests.filter(r => r.status === 'approved')
-  const otherRequests = requests.filter(r => !['pending', 'approved'].includes(r.status))
+  const approvedRequests = requests.filter(r => r.status === 'validated')
+  const otherRequests = requests.filter(r => !['pending', 'validated'].includes(r.status))
 
   return (
     <div className="container">
@@ -234,7 +243,7 @@ const AdminPage = () => {
                   <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     <p><strong>Email:</strong> {request.email}</p>
                     <p><strong>Type:</strong> {request.signature_type.toUpperCase()}</p>
-                    <p><strong>Approved:</strong> {new Date(request.approved_at).toLocaleString()}</p>
+                    <p><strong>Updated:</strong> {new Date(request.updated_at).toLocaleString()}</p>
                     {request.signature_type === 'e-ttd' && request.validation_token && (
                       <p><strong>Validation Token:</strong> <code>{request.validation_token}</code></p>
                     )}

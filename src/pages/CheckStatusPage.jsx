@@ -154,7 +154,7 @@ const CheckStatusPage = () => {
                         📄 Download Original
                       </button>
                     )}
-                    {request.qr_code_url && request.status === 'approved' && (
+                    {request.qr_code_url && (request.status === 'validated' || request.status === 'signed') && (
                       <button
                         className="btn btn-success"
                         onClick={() => handleDownload(request.qr_code_url, `QR_${request.document_name.replace('.pdf', '')}.png`)}
