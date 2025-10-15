@@ -89,8 +89,8 @@ const AdminPage = () => {
         viewport: viewport
       }
       
-      await page.render(renderContext).promise
-      console.log('✅ PDF rendered on canvas successfully')
+      await page.render(renderContext)
+      console.log('✅ Page rendered successfully')
       console.log('Canvas size:', canvas.width, 'x', canvas.height)
       console.log('Canvas style:', canvas.style.width, 'x', canvas.style.height)
     } catch (error) {
