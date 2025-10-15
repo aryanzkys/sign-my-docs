@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
+import * as pdfjsLib from 'pdfjs-dist/webpack'
+import 'pdfjs-dist/web/pdf_viewer.css'
 import '../App.css'
+
+// Configure PDF.js worker for version 5.x - use unpkg for ES module support
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+}
 
 const AdminPage = () => {
   const [requests, setRequests] = useState([])
@@ -9,15 +16,84 @@ const AdminPage = () => {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [signatureImage, setSignatureImage] = useState(null)
   const [pdfUrl, setPdfUrl] = useState(null)
+  const [setPdfDoc] = useState(null)
+  const [pdfPageDimensions, setPdfPageDimensions] = useState({ width: 595, height: 842 }) // A4 default
   const [signaturePosition, setSignaturePosition] = useState({ x: 100, y: 100 })
+  const [signatureSize, setSignatureSize] = useState({ width: 100, height: 100 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
   const [showSignatureUpload, setShowSignatureUpload] = useState(false)
-  const pdfViewerRef = useRef(null)
+  const canvasRef = useRef(null)
   const signatureRef = useRef(null)
+  const resizeHandleRef = useRef(null)
 
   useEffect(() => {
     fetchRequests()
   }, [])
+
+  // Render PDF on canvas when URL changes
+  useEffect(() => {
+    if (pdfUrl && canvasRef.current) {
+      renderPDF(pdfUrl)
+    }
+  }, [pdfUrl])
+
+  const renderPDF = async (url) => {
+    try {
+      console.log('Loading PDF for canvas rendering:', url)
+      
+      if (!canvasRef.current) {
+        console.error('Canvas ref is not available')
+        return
+      }
+      
+      const loadingTask = pdfjsLib.getDocument({
+        url: url,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+        cMapPacked: true,
+      })
+      
+      const pdf = await loadingTask.promise
+      console.log('PDF loaded successfully, pages:', pdf.numPages)
+      setPdfDoc(pdf)
+      
+      // Get first page
+      const page = await pdf.getPage(1)
+      const viewport = page.getViewport({ scale: 1.0 })
+      
+      console.log('PDF page dimensions:', { width: viewport.width, height: viewport.height })
+      
+      // Store actual PDF dimensions
+      setPdfPageDimensions({
+        width: viewport.width,
+        height: viewport.height
+      })
+      
+      // Set canvas size to match PDF
+      const canvas = canvasRef.current
+      const context = canvas.getContext('2d')
+      
+      // Set canvas internal dimensions
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      
+      console.log('Canvas dimensions set:', { width: canvas.width, height: canvas.height })
+      
+      // Render PDF page
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      }
+      
+      await page.render(renderContext).promise
+      console.log('✅ PDF rendered on canvas successfully')
+      console.log('Canvas size:', canvas.width, 'x', canvas.height)
+      console.log('Canvas style:', canvas.style.width, 'x', canvas.style.height)
+    } catch (error) {
+      console.error('❌ Error rendering PDF:', error)
+      alert(`Error loading PDF: ${error.message}`)
+    }
+  }
 
   const fetchRequests = async () => {
     try {
@@ -40,7 +116,11 @@ const AdminPage = () => {
     setPdfUrl(request.document_url)
     
     if (request.signature_type === 'e-ttd' && request.qr_code_url) {
+      console.log('E-TTD request selected, loading QR code from URL')
+      console.log('Validation token:', request.validation_token)
+      console.log('QR code URL length:', request.qr_code_url?.length)
       setSignatureImage(request.qr_code_url)
+      setShowSignatureUpload(false)
     } else {
       setSignatureImage(null)
       setShowSignatureUpload(true)
@@ -60,56 +140,135 @@ const AdminPage = () => {
   }
 
   const handleMouseDown = (e) => {
-    if (signatureRef.current && signatureRef.current.contains(e.target)) {
+    if (resizeHandleRef.current && resizeHandleRef.current.contains(e.target)) {
+      setIsResizing(true)
+      e.stopPropagation()
+    } else if (signatureRef.current && signatureRef.current.contains(e.target)) {
       setIsDragging(true)
     }
   }
 
   const handleMouseMove = (e) => {
-    if (isDragging && pdfViewerRef.current) {
-      const rect = pdfViewerRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left - 50
-      const y = e.clientY - rect.top - 50
-      setSignaturePosition({ x, y })
+    if (!canvasRef.current) return
+    
+    const rect = canvasRef.current.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    if (isDragging) {
+      // Dragging - move the QR code
+      const newX = Math.max(0, Math.min(mouseX - signatureSize.width / 2, pdfPageDimensions.width - signatureSize.width))
+      const newY = Math.max(0, Math.min(mouseY - signatureSize.height / 2, pdfPageDimensions.height - signatureSize.height))
+      setSignaturePosition({ x: newX, y: newY })
+    } else if (isResizing) {
+      // Resizing - adjust size
+      const newWidth = Math.max(50, Math.min(mouseX - signaturePosition.x, pdfPageDimensions.width - signaturePosition.x))
+      const newHeight = Math.max(50, Math.min(mouseY - signaturePosition.y, pdfPageDimensions.height - signaturePosition.y))
+      setSignatureSize({ width: newWidth, height: newHeight })
     }
   }
 
   const handleMouseUp = () => {
     setIsDragging(false)
+    setIsResizing(false)
   }
 
   const handleApplySignature = async () => {
     if (!selectedRequest || !signatureImage) return
 
     try {
+      console.log('Starting signature application process...')
+      console.log('Request type:', selectedRequest.signature_type)
+      console.log('Signature image type:', signatureImage.substring(0, 30))
+      
       const response = await fetch(selectedRequest.document_url)
       const pdfBytes = await response.arrayBuffer()
+      console.log('Original PDF loaded, size:', pdfBytes.byteLength, 'bytes')
 
-      const pdfViewerHeight = pdfViewerRef.current.offsetHeight
-      const pdfActualY = pdfViewerHeight - signaturePosition.y - 100
-
+      // Use exact PDF coordinates - no scaling needed since canvas matches PDF dimensions
+      console.log('PDF page dimensions:', pdfPageDimensions)
+      console.log('QR code position (PDF points):', signaturePosition)
+      console.log('QR code size (PDF points):', signatureSize)
+      
       const modifiedPdfBytes = await addImageToPDF(
         pdfBytes,
         signatureImage,
         signaturePosition.x,
-        pdfActualY,
-        100,
-        100
+        signaturePosition.y,
+        signatureSize.width,
+        signatureSize.height
       )
+      console.log('Modified PDF created, size:', modifiedPdfBytes.byteLength, 'bytes')
+      
+      // Log size comparison (PDF libraries can optimize/compress, so size may vary)
+      const sizeDiff = modifiedPdfBytes.byteLength - pdfBytes.byteLength
+      if (sizeDiff > 0) {
+        console.log('✓ Modified PDF is larger than original by', sizeDiff, 'bytes')
+      } else if (sizeDiff < 0) {
+        console.log('ℹ Modified PDF is smaller by', Math.abs(sizeDiff), 'bytes (likely due to PDF optimization)')
+      } else {
+        console.log('ℹ Modified PDF has same size as original (PDF was likely re-compressed)')
+      }
+      console.log('✓ QR code embedding completed successfully')
 
+      // CRITICAL: Download the modified PDF locally to verify QR code is embedded
+      console.log('Creating local download for verification...')
+      const verifyBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+      const verifyUrl = URL.createObjectURL(verifyBlob)
+      const verifyLink = document.createElement('a')
+      verifyLink.href = verifyUrl
+      verifyLink.download = `VERIFY_signed_${selectedRequest.document_name}`
+      verifyLink.click()
+      URL.revokeObjectURL(verifyUrl)
+      console.log('✓ Verification PDF downloaded - please check if QR code is present!')
+      
+      // Ask user to verify before uploading
+      const shouldUpload = confirm(
+        'PDF with QR code has been downloaded for verification.\n\n' +
+        'Please open the downloaded file and verify the QR code is visible.\n\n' +
+        'Click OK to continue uploading to storage.\n' +
+        'Click Cancel to abort.'
+      )
+      
+      if (!shouldUpload) {
+        console.log('Upload cancelled by user')
+        alert('Upload cancelled. The modified PDF was not uploaded.')
+        return
+      }
+      
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
       const fileName = `signed_${Date.now()}.pdf`
       
+      console.log('Uploading signed PDF to storage...')
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, blob)
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw uploadError
+      }
 
       const { data: urlData } = supabase.storage
         .from('documents')
         .getPublicUrl(fileName)
 
+      console.log('Signed PDF uploaded, URL:', urlData.publicUrl)
+      
+      // Verify the upload by fetching the file back
+      console.log('Verifying uploaded file...')
+      const verifyResponse = await fetch(urlData.publicUrl)
+      const verifyBytes = await verifyResponse.arrayBuffer()
+      console.log('Verified uploaded file size:', verifyBytes.byteLength, 'bytes')
+      
+      if (verifyBytes.byteLength !== modifiedPdfBytes.byteLength) {
+        console.error('ERROR: Uploaded file size does not match modified PDF!')
+        console.error('Expected:', modifiedPdfBytes.byteLength, 'Got:', verifyBytes.byteLength)
+        alert('Warning: There may be an issue with the uploaded file. File sizes do not match!')
+      } else {
+        console.log('✓ Upload verification successful - file sizes match')
+      }
+      
       const { error: updateError } = await supabase
         .from('signature_requests')
         .update({
@@ -120,7 +279,12 @@ const AdminPage = () => {
 
       if (updateError) throw updateError
 
-      alert('Document signed successfully!')
+      console.log('Database updated successfully')
+      console.log('=== SIGNATURE APPLICATION COMPLETE ===')
+      console.log('Signed document URL:', urlData.publicUrl)
+      console.log('User can now download from /check page')
+      
+      alert(`Document signed successfully!\n\nSigned PDF URL: ${urlData.publicUrl}\n\nYou can verify the QR code is embedded by opening this URL.`)
       fetchRequests()
       setSelectedRequest(null)
       setPdfUrl(null)
@@ -254,25 +418,53 @@ const AdminPage = () => {
               </div>
             )}
 
+            {selectedRequest.signature_type === 'e-ttd' && signatureImage && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '1rem', 
+                background: 'rgba(102, 126, 234, 0.1)', 
+                borderRadius: '8px',
+                border: '1px solid rgba(102, 126, 234, 0.3)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>✓</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>QR Code Ready</strong>
+                </div>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0.5rem 0' }}>
+                  The E-TTD QR code has been generated and is ready to place on the document.
+                  Drag it to the desired position and click "Apply Signature" to embed it permanently.
+                </p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0.5rem 0 0 0' }}>
+                  <strong>Validation URL:</strong> <code style={{ background: 'rgba(255,255,255,0.5)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                    https://signme-aryan.netlify.app/validate/{selectedRequest.validation_token}
+                  </code>
+                </p>
+              </div>
+            )}
+
             {pdfUrl && (
               <div
-                ref={pdfViewerRef}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 style={{
                   position: 'relative',
                   border: '2px solid var(--border-color)',
                   borderRadius: '8px',
-                  overflow: 'hidden',
-                  minHeight: '600px',
+                  overflow: 'auto',
                   background: '#f7fafc',
                   marginBottom: '1rem',
+                  display: 'block',
+                  width: 'fit-content',
+                  maxWidth: '100%',
                 }}
               >
-                <iframe
-                  src={pdfUrl}
-                  style={{ width: '100%', height: '600px', border: 'none' }}
-                  title="PDF Viewer"
+                <canvas
+                  ref={canvasRef}
+                  style={{ 
+                    display: 'block',
+                    border: '1px solid #ccc',
+                    backgroundColor: 'white',
+                  }}
                 />
                 {signatureImage && (
                   <div
@@ -282,18 +474,79 @@ const AdminPage = () => {
                       position: 'absolute',
                       left: `${signaturePosition.x}px`,
                       top: `${signaturePosition.y}px`,
+                      width: `${signatureSize.width}px`,
+                      height: `${signatureSize.height}px`,
                       cursor: isDragging ? 'grabbing' : 'grab',
-                      border: '2px dashed #667eea',
+                      border: selectedRequest?.signature_type === 'e-ttd' 
+                        ? '3px dashed #667eea' 
+                        : '2px dashed #667eea',
                       padding: '4px',
-                      background: 'rgba(255, 255, 255, 0.9)',
+                      background: 'rgba(255, 255, 255, 0.95)',
                       borderRadius: '4px',
+                      boxShadow: isDragging 
+                        ? '0 8px 16px rgba(102, 126, 234, 0.3)' 
+                        : '0 2px 8px rgba(0, 0, 0, 0.15)',
+                      transition: 'box-shadow 0.2s ease',
                     }}
                   >
                     <img
                       src={signatureImage}
-                      alt="Signature"
-                      style={{ width: '100px', height: '100px', pointerEvents: 'none' }}
+                      alt={selectedRequest?.signature_type === 'e-ttd' ? 'QR Code' : 'Signature'}
+                      style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'block', objectFit: 'contain' }}
                     />
+                    {selectedRequest?.signature_type === 'e-ttd' && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-24px',
+                        left: '0',
+                        right: '0',
+                        textAlign: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold',
+                        color: '#667eea',
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '2px 4px',
+                        borderRadius: '4px',
+                        border: '1px solid #667eea',
+                      }}>
+                        QR CODE
+                      </div>
+                    )}
+                    {/* Resize handle */}
+                    <div
+                      ref={resizeHandleRef}
+                      onMouseDown={handleMouseDown}
+                      style={{
+                        position: 'absolute',
+                        right: '0',
+                        bottom: '0',
+                        width: '16px',
+                        height: '16px',
+                        background: '#667eea',
+                        cursor: 'nwse-resize',
+                        borderRadius: '0 0 4px 0',
+                      }}
+                    />
+                  </div>
+                )}
+                {/* Display precise coordinates */}
+                {signatureImage && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontFamily: 'monospace',
+                    border: '1px solid #667eea',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  }}>
+                    <div><strong>Position (PDF points):</strong></div>
+                    <div>X: {Math.round(signaturePosition.x)}, Y: {Math.round(signaturePosition.y)}</div>
+                    <div><strong>Size (PDF points):</strong></div>
+                    <div>W: {Math.round(signatureSize.width)}, H: {Math.round(signatureSize.height)}</div>
                   </div>
                 )}
               </div>

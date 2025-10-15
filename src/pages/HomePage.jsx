@@ -34,16 +34,20 @@ const HomePage = () => {
 
     try {
       const token = generateToken()
+      console.log('Generated validation token:', token)
+      
       let qrCodeUrl = null
 
       if (signatureType === 'e-ttd') {
         qrCodeUrl = await generateQRCode(token)
+        console.log('QR code generated for E-TTD request')
       }
 
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
       const filePath = `${fileName}`
 
+      console.log('Uploading document to storage...')
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file)
@@ -56,6 +60,7 @@ const HomePage = () => {
         .from('documents')
         .getPublicUrl(filePath)
 
+      console.log('Document uploaded, creating signature request...')
       const { error: insertError } = await supabase
         .from('signature_requests')
         .insert([
@@ -74,6 +79,7 @@ const HomePage = () => {
         throw insertError
       }
 
+      console.log('Signature request created successfully')
       setMessage('Document uploaded successfully! You can check the status at /check')
       setEmail('')
       setFile(null)

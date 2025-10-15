@@ -135,17 +135,40 @@ netlify deploy --prod
 1. Admin logs in at `/admintte`
 2. Views pending signature requests
 3. Selects a request to process
-4. For E-TTD: QR code is automatically generated and ready to place
-5. For TDD Digital: Uploads a signature image
-6. Drags and drops the signature/QR code onto the PDF
-7. Applies the signature to create a signed document
-8. Signed document is saved and available for download
+4. **For E-TTD:** 
+   - QR code is automatically generated when user submits the request
+   - QR code is loaded and displayed as a draggable element on the PDF viewer
+   - Admin drags the QR code to the desired position on the document
+   - Clicking "Apply Signature" permanently embeds the QR code into the PDF
+   - The QR code contains the validation URL: `https://signme-aryan.netlify.app/validate/{token}`
+5. **For TDD Digital:** 
+   - Admin uploads a signature image
+   - Drags and drops the signature onto the PDF
+6. Applies the signature to create a signed document
+7. Signed document with embedded QR code/signature is uploaded to storage
+8. Database is updated with the signed document URL
 
 ### Validation Flow (E-TTD)
-1. User scans the QR code on the signed document
-2. QR code redirects to `/validate/:token`
-3. System validates the token and displays document details
-4. Document status is updated to "validated"
+1. User receives the signed PDF with the embedded QR code
+2. User scans the QR code using any QR code scanner (phone camera, app, etc.)
+3. QR code redirects to `/validate/:token`
+4. System validates the token against the database
+5. Displays document details and validation status
+6. Document status is updated to "validated"
+
+## E-TTD QR Code Implementation Details
+
+The E-TTD (Electronic Signature with QR Code) feature ensures document authenticity through:
+
+1. **QR Code Generation**: When a user submits an E-TTD request, a unique validation token is generated and a QR code is created containing the validation URL.
+
+2. **QR Code Embedding**: The admin can drag and position the QR code on the PDF. When "Apply Signature" is clicked:
+   - The QR code image (PNG data URL) is converted to binary format
+   - The image is embedded directly into the PDF using the pdf-lib library
+   - Coordinates are transformed from screen space to PDF space (bottom-left origin)
+   - The modified PDF is saved and uploaded to storage
+
+3. **Validation**: The QR code contains a URL with a unique token that links to the specific signature request in the database, enabling verification of document authenticity.
 
 ## Database Schema
 
