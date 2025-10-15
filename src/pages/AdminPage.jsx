@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../config/supabase'
 import { addImageToPDF } from '../utils/pdfUtils'
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import '../App.css'
 
-// Configure PDF.js worker for version 5.x - use esm.sh CDN for proper ES module support
+// Configure PDF.js worker for version 5.x - use local worker import for Vite bundling
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
   console.log('PDF.js version:', pdfjsLib.version)
   console.log('WorkerSrc:', pdfjsLib.GlobalWorkerOptions.workerSrc)
 }
