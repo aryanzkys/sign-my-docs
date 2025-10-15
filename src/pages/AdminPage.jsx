@@ -5,9 +5,11 @@ import * as pdfjsLib from 'pdfjs-dist'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import '../App.css'
 
-// Configure PDF.js worker for version 5.x - use unpkg for ES module support
+// Configure PDF.js worker for version 5.x - use esm.sh CDN for proper ES module support
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+  console.log('PDF.js version:', pdfjsLib.version)
+  console.log('WorkerSrc:', pdfjsLib.GlobalWorkerOptions.workerSrc)
 }
 
 const AdminPage = () => {
@@ -41,6 +43,8 @@ const AdminPage = () => {
   const renderPDF = async (url) => {
     try {
       console.log('Loading PDF for canvas rendering:', url)
+      console.log('PDF.js version:', pdfjsLib.version)
+      console.log('WorkerSrc:', pdfjsLib.GlobalWorkerOptions.workerSrc)
       
       if (!canvasRef.current) {
         console.error('Canvas ref is not available')
@@ -54,7 +58,7 @@ const AdminPage = () => {
       })
       
       const pdf = await loadingTask.promise
-      console.log('PDF loaded successfully, pages:', pdf.numPages)
+      console.log('PDF loaded with', pdf.numPages, 'pages')
       setPdfDoc(pdf)
       
       // Get first page
@@ -90,7 +94,8 @@ const AdminPage = () => {
       console.log('Canvas size:', canvas.width, 'x', canvas.height)
       console.log('Canvas style:', canvas.style.width, 'x', canvas.style.height)
     } catch (error) {
-      console.error('❌ Error rendering PDF:', error)
+      console.error('❌ Error loading PDF:', error)
+      console.error('Error details:', error.message, error.stack)
       alert(`Error loading PDF: ${error.message}`)
     }
   }
